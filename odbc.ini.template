@@ -1,0 +1,4 @@
+[MyData]
+Description=My madras data source
+Driver=Madras
+DBQ=/path/to/your/file.mdsi

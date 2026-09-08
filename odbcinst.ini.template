@@ -1,0 +1,5 @@
+[Madras]
+Description=Madras SQL Engine ODBC Driver
+Driver=/path/to/libmadras_odbc.so
+Setup=/path/to/libmadras_odbc.so
+FileUsage=1
