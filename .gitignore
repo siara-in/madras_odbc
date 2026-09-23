@@ -1,3 +1,6 @@
 .DS_Store
-build
-
+build/
+build_linux/
+build_macos/
+build_windows/
+build_ubuntu/
