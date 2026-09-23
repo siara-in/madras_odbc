@@ -73,3 +73,7 @@ See [`odbc.ini.template`](odbc.ini.template) and [`odbcinst.ini.template`](odbci
 ## License
 
 This work is licensed under the MIT License. See [LICENSE](LICENSE).
+
+## Support
+
+Please feel free to communicate suggestions, improvements and corrections by creating issues here or send email to Arundale Ramanathan at arun@siara.in.
