@@ -5,16 +5,16 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Same convention as madras_jvm/native/CMakeLists.txt -- override with
-# -DMADRAS_INCLUDE_DIR=/path/to/madras-trie/include if your checkout
-# layout differs.
+# Defaults to the madras_sorcery_core git submodule vendored in this repo.
+# Override with -DMADRAS_INCLUDE_DIR=/path/to/include if your checkout differs.
 if(NOT DEFINED MADRAS_INCLUDE_DIR)
-  set(MADRAS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../src/madras-trie/include")
+  set(MADRAS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/madras_sorcery_core/include")
 endif()
 
-# Same convention -- override with -DMADRAS_SQL_INCLUDE_DIR=/path/to/madras_sql_repo/src
+# Defaults to the madras_sql git submodule vendored in this repo.
+# Override with -DMADRAS_SQL_INCLUDE_DIR=/path/to/src if your checkout differs.
 if(NOT DEFINED MADRAS_SQL_INCLUDE_DIR)
-  set(MADRAS_SQL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../madras_sql_repo/src")
+  set(MADRAS_SQL_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/madras_sql/src")
 endif()
 
 find_package(Threads REQUIRED)

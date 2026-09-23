@@ -8,13 +8,22 @@ Madras Sorcery is a compact, static datastore where a single `.mdsi` file is sim
 
 ## Getting started
 
-Build the driver:
+This repository vendors [madras_sorcery_core](https://github.com/siara-in/madras_sorcery_core) and [madras_sql](https://github.com/siara-in/madras_sql) as git submodules, so clone with:
 
 ```bash
-cmake -B build -DMADRAS_INCLUDE_DIR=/path/to/madras_sorcery_core/include \
-               -DMADRAS_SQL_INCLUDE_DIR=/path/to/madras_sql/src
+git clone --recursive https://github.com/siara-in/madras_odbc.git
+# or, if already cloned:
+git submodule update --init --recursive
+```
+
+Then build the driver:
+
+```bash
+cmake -B build
 cmake --build build
 ```
+
+To build against a different checkout of either dependency instead of the submodules, pass `-DMADRAS_INCLUDE_DIR=/path/to/include` and/or `-DMADRAS_SQL_INCLUDE_DIR=/path/to/src`.
 
 Produces `build/libmadras_odbc.so` (Linux), `.dylib` (macOS), or `madras_odbc.dll` (Windows).
 

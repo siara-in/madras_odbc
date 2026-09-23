@@ -1,0 +1,6 @@
+[submodule "madras_sorcery_core"]
+	path = madras_sorcery_core
+	url = https://github.com/siara-in/madras_sorcery_core.git
+[submodule "madras_sql"]
+	path = madras_sql
+	url = https://github.com/siara-in/madras_sql.git
