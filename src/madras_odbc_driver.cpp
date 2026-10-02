@@ -27,7 +27,7 @@
 #include <vector>
 #include <memory>
 
-#include "madras/dv1/reader/static_trie_map.hpp"
+#include "madras/dv1/reader/static_table_map.hpp"
 #include "dv1/engine.hpp"
 
 using namespace madras::dv1;
@@ -47,7 +47,7 @@ struct OdbcDiag {
 };
 
 struct OdbcConn {
-    std::unique_ptr<static_trie_map> stm;
+    std::unique_ptr<static_table_map> stm;
     std::unique_ptr<dv1sql::engine> eng;
     OdbcDiag diag;
     bool connected = false;
@@ -425,7 +425,7 @@ static SQLRETURN DoConnect(OdbcConn *conn, const std::string &conn_str,
         return SQL_ERROR;
     }
 
-    conn->stm = std::unique_ptr<static_trie_map>(new static_trie_map());
+    conn->stm = std::unique_ptr<static_table_map>(new static_table_map());
     try {
         conn->stm->load(path.c_str());
     } catch (int errnum) {
