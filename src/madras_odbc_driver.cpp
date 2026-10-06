@@ -444,6 +444,11 @@ static SQLRETURN DoConnect(OdbcConn *conn, const std::string &conn_str,
     }
     conn->eng = std::unique_ptr<dv1sql::engine>(new dv1sql::engine());
     conn->eng->init(conn->stm.get());
+    // madras_sql logs "Using index: ..." to stderr for every indexed lookup;
+    // a driver shouldn't write into its host application's stderr, so it's
+    // off unless MADRAS_ODBC_LOG_INDEX=1
+    const char *log_index = getenv("MADRAS_ODBC_LOG_INDEX");
+    dv1sql::index_logging_enabled() = (log_index != nullptr && strcmp(log_index, "1") == 0);
     conn->connected = true;
     ClearError(conn->diag);
 
