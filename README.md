@@ -68,6 +68,8 @@ You can also skip DSN registration entirely and specify the driver and file path
 DRIVER={Madras};DBQ=/path/to/your/file.mdsi;
 ```
 
+The file is memory-mapped by default. Add `MMAP=0;` (or `MMAP=0` in the DSN entry) to read it fully into memory instead.
+
 See [`odbc.ini.template`](odbc.ini.template) and [`odbcinst.ini.template`](odbcinst.ini.template) for Windows setup and further detail. Note this is a deliberately scoped driver — `SELECT` queries only, no DML, transactions, Unicode entry points, or scrollable cursors.
 
 ## License

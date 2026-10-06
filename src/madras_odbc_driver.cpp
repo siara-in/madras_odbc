@@ -147,6 +147,27 @@ static std::string ExtractDbq(const std::string &conn_str) {
     return trimmed;
 }
 
+// "MMAP=0;" in the connection string (or the DSN's odbc.ini entry) reads the
+// whole .mdsi into memory (static_table_map::load) instead of mapping it;
+// default is mmap, falling back to load() if mapping fails.
+static bool WantMmap(const std::string &conn_str) {
+    std::string upper = conn_str;
+    for (auto &c : upper) c = (char) toupper((unsigned char) c);
+    std::string val;
+    size_t pos = upper.find("MMAP=");
+    if (pos != std::string::npos) {
+        size_t end = upper.find(';', pos + 5);
+        val = upper.substr(pos + 5, end == std::string::npos ? std::string::npos : end - pos - 5);
+    } else if ((pos = upper.find("DSN=")) != std::string::npos) {
+        size_t end = conn_str.find(';', pos + 4);
+        std::string dsn_name = conn_str.substr(pos + 4, end == std::string::npos ? std::string::npos : end - pos - 4);
+        char buf[16] = {0};
+        SQLGetPrivateProfileString(dsn_name.c_str(), "MMAP", "", buf, sizeof(buf), "odbc.ini");
+        val = buf;
+    }
+    return !(val == "0" || val == "NO" || val == "FALSE");
+}
+
 // Copies a text value into an ODBC caller-supplied buffer, honoring
 // truncation and NULL-indication semantics: if the buffer is smaller than
 // the (converted) value, copies as much as fits, null-terminates within
@@ -427,7 +448,8 @@ static SQLRETURN DoConnect(OdbcConn *conn, const std::string &conn_str,
 
     conn->stm = std::unique_ptr<static_table_map>(new static_table_map());
     try {
-        conn->stm->load(path.c_str());
+        if (!WantMmap(conn_str) || !conn->stm->map_file_to_mem(path.c_str()))
+            conn->stm->load(path.c_str());
     } catch (int errnum) {
         SetError(conn->diag, "08001", "Failed to open " + path + ": errno " + std::to_string(errnum));
         return SQL_ERROR;
