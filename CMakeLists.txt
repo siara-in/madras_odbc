@@ -5,10 +5,10 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Defaults to the madras_sorcery_core git submodule vendored in this repo.
+# Defaults to the madras_core git submodule vendored in this repo.
 # Override with -DMADRAS_INCLUDE_DIR=/path/to/include if your checkout differs.
 if(NOT DEFINED MADRAS_INCLUDE_DIR)
-  set(MADRAS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/madras_sorcery_core/include")
+  set(MADRAS_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/core/include")
 endif()
 
 # Defaults to the madras_sql git submodule vendored in this repo.

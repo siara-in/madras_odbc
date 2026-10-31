@@ -8,7 +8,7 @@ Madras Sorcery is a compact, static datastore where a single `.mdsi` file is sim
 
 ## Getting started
 
-This repository vendors [madras_sorcery_core](https://github.com/siara-in/madras_sorcery_core) and [madras_sql](https://github.com/siara-in/madras_sql) as git submodules, so clone with:
+This repository vendors [madras_core](https://github.com/siara-in/madras_core) and [madras_sql](https://github.com/siara-in/madras_sql) as git submodules, so clone with:
 
 ```bash
 git clone --recursive https://github.com/siara-in/madras_odbc.git
