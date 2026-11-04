@@ -241,6 +241,37 @@ static SQLRETURN CopyToBuffer(const std::string *value, bool is_null,
     }
 }
 
+// A result cell into the caller's buffer: numbers read as numbers go
+// straight from the typed value (no text formatted and parsed back);
+// everything else through its text (CopyToBuffer).
+static SQLRETURN CopyCellToBuffer(const sql::cell &value, SQLSMALLINT c_type, SQLPOINTER buffer,
+                                   SQLLEN buffer_len, SQLLEN *str_len_or_ind) {
+    if (value.kind != sql::cell::TEXT) {
+        switch (c_type) {
+            case SQL_C_LONG:
+            case SQL_C_SLONG:
+                if (buffer) *(SQLINTEGER *) buffer = (SQLINTEGER) value.as_int();
+                if (str_len_or_ind) *str_len_or_ind = sizeof(SQLINTEGER);
+                return SQL_SUCCESS;
+            case SQL_C_SBIGINT:
+                if (buffer) *(SQLBIGINT *) buffer = (SQLBIGINT) value.as_int();
+                if (str_len_or_ind) *str_len_or_ind = sizeof(SQLBIGINT);
+                return SQL_SUCCESS;
+            case SQL_C_DOUBLE:
+                if (buffer) *(SQLDOUBLE *) buffer = value.as_dbl();
+                if (str_len_or_ind) *str_len_or_ind = sizeof(SQLDOUBLE);
+                return SQL_SUCCESS;
+            case SQL_C_FLOAT:
+                if (buffer) *(SQLREAL *) buffer = (SQLREAL) value.as_dbl();
+                if (str_len_or_ind) *str_len_or_ind = sizeof(SQLREAL);
+                return SQL_SUCCESS;
+            default:
+                break;
+        }
+    }
+    return CopyToBuffer(&value.str(), value.is_null(), c_type, buffer, buffer_len, str_len_or_ind);
+}
+
 // Reads a NULL-terminated bound parameter's app buffer and converts it
 // to the text representation the engine's apply_param_patches() expects.
 static std::string ParamToString(const BoundParam &p) {
@@ -656,10 +687,15 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT handle, SQLUSMALLINT col_number, SQLU
 SQLRETURN SQL_API SQLFetch(SQLHSTMT handle) {
     auto *stmt = (OdbcStmt *) handle;
     if (!stmt->has_result) return SQL_ERROR;
+    // current_row: in the result's batch (rows); past it, the next batch
     stmt->current_row++;
     if ((size_t) stmt->current_row >= stmt->result.rows.size()) {
-        stmt->current_row = (long long) stmt->result.rows.size(); // past the end
-        return SQL_NO_DATA;
+        if (stmt->result.next_batch() && !stmt->result.rows.empty()) {
+            stmt->current_row = 0;
+        } else {
+            stmt->current_row = (long long) stmt->result.rows.size(); // past the end
+            return SQL_NO_DATA;
+        }
     }
     // Populate any SQLBindCol-bound buffers automatically -- unlike
     // GetData, bound columns refresh on every Fetch without the caller
@@ -668,14 +704,9 @@ SQLRETURN SQL_API SQLFetch(SQLHSTMT handle) {
     for (size_t i = 0; i < stmt->bound_cols.size(); i++) {
         BoundCol &bc = stmt->bound_cols[i];
         if (!bc.bound || i >= row.size()) continue;
-        bool is_null = row[i].empty(); // this engine has no separate NULL
-                                        // marker in query_result -- an
-                                        // empty string is the closest
-                                        // available signal, a known,
-                                        // documented simplification (see
-                                        // README) shared with the rest of
-                                        // this driver's text-based model.
-        CopyToBuffer(&row[i], is_null, bc.c_type, bc.app_buffer, bc.buffer_len, bc.str_len_or_ind);
+        // NULL: empty text (no separate NULL marker in query_result, see
+        // README)
+        CopyCellToBuffer(row[i], bc.c_type, bc.app_buffer, bc.buffer_len, bc.str_len_or_ind);
     }
     return SQL_SUCCESS;
 }
@@ -693,9 +724,7 @@ SQLRETURN SQL_API SQLGetData(SQLHSTMT handle, SQLUSMALLINT col_number, SQLSMALLI
         SetError(stmt->diag, "07009", "Invalid column number");
         return SQL_ERROR;
     }
-    const std::string &value = row[col_number - 1];
-    bool is_null = value.empty();
-    return CopyToBuffer(&value, is_null, c_type, buffer, buffer_len, str_len_or_ind);
+    return CopyCellToBuffer(row[col_number - 1], c_type, buffer, buffer_len, str_len_or_ind);
 }
 
 SQLRETURN SQL_API SQLBindCol(SQLHSTMT handle, SQLUSMALLINT col_number, SQLSMALLINT c_type,
@@ -720,7 +749,7 @@ SQLRETURN SQL_API SQLBindCol(SQLHSTMT handle, SQLUSMALLINT col_number, SQLSMALLI
 
 SQLRETURN SQL_API SQLRowCount(SQLHSTMT handle, SQLLEN *count) {
     auto *stmt = (OdbcStmt *) handle;
-    if (count) *count = stmt->has_result ? (SQLLEN) stmt->result.rows.size() : 0;
+    if (count) *count = stmt->has_result ? (SQLLEN) stmt->result.row_count() : 0;
     return SQL_SUCCESS;
 }
 
@@ -1028,12 +1057,12 @@ SQLRETURN SQL_API SQLGetDataW(SQLHSTMT handle, SQLUSMALLINT col_number, SQLSMALL
         SetError(stmt->diag, "07009", "Invalid column number");
         return SQL_ERROR;
     }
-    const std::string &value = row[col_number - 1];
+    const sql::cell &value = row[col_number - 1];
     // Default to SQL_C_WCHAR for a Unicode caller that didn't specify
     // (SQL_C_DEFAULT) -- CopyToBuffer now handles SQL_C_WCHAR correctly
     // (see its own comment on why this case is required, not optional).
     SQLSMALLINT effective_type = (c_type == SQL_C_DEFAULT) ? SQL_C_WCHAR : c_type;
-    return CopyToBuffer(&value, value.empty(), effective_type, buffer, buffer_len, str_len_or_ind);
+    return CopyCellToBuffer(value, effective_type, buffer, buffer_len, str_len_or_ind);
 }
 
 SQLRETURN SQL_API SQLDescribeColW(SQLHSTMT handle, SQLUSMALLINT col_number,
