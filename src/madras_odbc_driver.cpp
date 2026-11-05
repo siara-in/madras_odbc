@@ -25,7 +25,9 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <map>
 #include <memory>
+#include <mutex>
 
 #include "madras/dv1/reader/static_table_map.hpp"
 #include "dv1/engine.hpp"
@@ -46,8 +48,16 @@ struct OdbcDiag {
     bool has_error = false;
 };
 
+// A loaded .mdsi and its row groups, shared by every connection to the file
+// (lookups only read them); groups point into stm's bytes, so stm is
+// declared first and destroyed last
+struct OpenFile {
+    static_table_map stm;
+    row_group_map groups;
+};
+
 struct OdbcConn {
-    std::unique_ptr<static_table_map> stm;
+    std::shared_ptr<OpenFile> file;
     std::unique_ptr<dv1sql::engine> eng;
     OdbcDiag diag;
     bool connected = false;
@@ -459,6 +469,26 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV, SQLINTEGER, SQLPOINTER, SQLINTEGER) {
 // Connect / disconnect
 // ---------------------------------------------------------------------
 
+// The file at path, shared by every connection to it in this process: one
+// mapping (its pages counted once in RSS) and one set of row groups, opened
+// once. Freed when its last connection closes. Throws as static_table_map's
+// map_file_to_mem / load do.
+static std::shared_ptr<OpenFile> OpenShared(const std::string &path, bool use_mmap) {
+    static std::mutex open_mutex;
+    static std::map<std::string, std::weak_ptr<OpenFile>> open_files;
+    std::lock_guard<std::mutex> guard(open_mutex);
+    std::string key = (use_mmap ? "m:" : "l:") + path;
+    std::shared_ptr<OpenFile> file = open_files[key].lock();
+    if (file)
+        return file;
+    file = std::make_shared<OpenFile>();
+    if (!use_mmap || !file->stm.map_file_to_mem(path.c_str()))
+        file->stm.load(path.c_str());
+    file->groups.load_from_mem(file->stm.get_file_bytes(), file->stm.get_file_size());
+    open_files[key] = file;
+    return file;
+}
+
 // Core connect logic, NOT exported (no SQL_API/extern "C" linkage name
 // collision risk) -- both SQLDriverConnect and SQLConnect call this
 // directly as a plain C++ function. Confirmed as necessary, not
@@ -477,10 +507,8 @@ static SQLRETURN DoConnect(OdbcConn *conn, const std::string &conn_str,
         return SQL_ERROR;
     }
 
-    conn->stm = std::unique_ptr<static_table_map>(new static_table_map());
     try {
-        if (!WantMmap(conn_str) || !conn->stm->map_file_to_mem(path.c_str()))
-            conn->stm->load(path.c_str());
+        conn->file = OpenShared(path, WantMmap(conn_str));
     } catch (int errnum) {
         SetError(conn->diag, "08001", "Failed to open " + path + ": errno " + std::to_string(errnum));
         return SQL_ERROR;
@@ -496,7 +524,7 @@ static SQLRETURN DoConnect(OdbcConn *conn, const std::string &conn_str,
         return SQL_ERROR;
     }
     conn->eng = std::unique_ptr<dv1sql::engine>(new dv1sql::engine());
-    conn->eng->init(conn->stm.get());
+    conn->eng->init(&conn->file->groups);
     // madras_sql logs "Using index: ..." to stderr for every indexed lookup;
     // a driver shouldn't write into its host application's stderr, so it's
     // off unless MADRAS_ODBC_LOG_INDEX=1
@@ -544,7 +572,7 @@ SQLRETURN SQL_API SQLConnect(SQLHDBC handle, SQLCHAR *dsn, SQLSMALLINT, SQLCHAR 
 SQLRETURN SQL_API SQLDisconnect(SQLHDBC handle) {
     auto *conn = (OdbcConn *) handle;
     conn->eng.reset();
-    conn->stm.reset();
+    conn->file.reset();
     conn->connected = false;
     return SQL_SUCCESS;
 }
